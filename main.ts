@@ -87,6 +87,72 @@ async function main() {
     await mongoose.connect('mongodb://127.0.0.1:27017/pmdor');
 }
 
+let currentSocket: any = null;
+
+const getDurationByType = (type: TimerTypes) => ({
+    [TimerTypes.pomadoro]: 25,
+    [TimerTypes.shortBreak]: 5,
+    [TimerTypes.longBreak]: 15
+}[type] * 60_000)
+
+const playTimer = async () => {
+    let timer: HydratedDocument<TimerType> | null = await Timer.getCurrent();
+
+    const createTimeout2FinishTimer = ({ duration, onFinish }: { duration: number, onFinish(): Promise<void> }) => {
+        return Number(setTimeout(onFinish, duration));
+    }
+
+    if (timer) {
+        let duration = getDurationByType(timer.type);
+        if (timer.passed > 0)
+            duration -= timer.passed;
+
+        const timerId = createTimeout2FinishTimer({
+            duration, onFinish: async () => {
+                currentSocket?.emit('statusChanged', await Timer.findByIdAndUpdate({ _id: timer?._id }, { status: TimerStatuses.finished, passed: duration, changedAt: Date.now() }));
+            }
+        });
+
+        return Timer.findByIdAndUpdate({ _id: timer._id }, { status: TimerStatuses.processing, changedAt: Date.now(), timerId }, { new: true });
+    } else {
+        return null;
+    }
+}
+
+const pauseTimer = async () => {
+    const timer: HydratedDocument<TimerType> | null = await Timer.getCurrent();
+
+    if (timer) {
+        let delta = Date.now() - timer.changedAt;
+        const passed = timer.passed + delta;
+
+        clearTimeout(timer.timerId);
+
+        return Timer.findByIdAndUpdate({ _id: timer._id }, { status: TimerStatuses.paused, changedAt: Date.now(), timerId: 0, passed }, { new: true });
+    } else {
+        return null;
+    }
+}
+
+io.on('connection', async (socket) => {
+    currentSocket = socket;
+    socket.emit('getCurrentTimer', await Timer.getCurrent());
+    socket.on('playTimer', async ({ type }: { type: TimerTypes } = { type: TimerTypes.pomadoro }) => {
+        let timer: HydratedDocument<TimerType> | null = await Timer.getCurrent();
+        if (!timer)
+            timer = await Timer.create({ type });
+        const nextTimer = await playTimer();
+        if (nextTimer)
+            currentSocket.emit('statusChanged', nextTimer);
+    });
+
+    socket.on('pauseTimer', async () => {
+        const timer = await pauseTimer();
+        if (timer)
+            currentSocket.emit('statusChanged', timer);
+    });
+})
+
 app.get('/timer/create', async (req, res) => {
     const { type } = req.query;
     const timer = await Timer.create({ type });
