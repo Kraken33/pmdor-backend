@@ -1,5 +1,5 @@
 import { HydratedDocument } from 'mongoose';
-import { TimerType, Timer, TimerTypes, TimerStatuses } from '../models/timer';
+import { TimerType, Timer, TimerTypes, TimerStatuses } from '../../models/timer';
 
 const counterDuration = {
     POMADORO: 25,
@@ -46,8 +46,6 @@ const pause = async () => {
     if (timer) {
         let delta = Date.now() - timer.changedAt;
         const passed = timer.passed + delta;
-
-        clearTimeout(timer.timerId);
 
         return Timer.findByIdAndUpdate({ _id: timer._id }, { status: TimerStatuses.paused, changedAt: Date.now(), timerId: 0, passed }, { new: true });
     } else {
