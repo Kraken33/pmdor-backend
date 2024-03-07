@@ -1,5 +1,6 @@
 import { HydratedDocument } from 'mongoose';
 import { TimerType, Timer, TimerTypes, TimerStatuses } from '../../models/timer';
+import { User } from '../../models/user';
 
 const counterDuration = {
     POMADORO: 25,
@@ -15,7 +16,7 @@ const getDurationByType = (type: TimerTypes) => ({
     [TimerTypes.test]: counterDuration.TEST
 }[type] * 60_000)
 
-const play = ({socket}: any)=>async () => {
+const play = ({ socket }: any) => async ({ userId }: { userId: string }) => {
     let timer: HydratedDocument<TimerType> | null = await Timer.getCurrent();
 
     const createTimeout2FinishTimer = ({ duration, onFinish }: { duration: number, onFinish(): Promise<void> }) => {
@@ -30,7 +31,11 @@ const play = ({socket}: any)=>async () => {
         const timerId = createTimeout2FinishTimer({
             duration, onFinish: async () => {
                 console.log('finished');
-                socket.emit('timer:status_changed', await Timer.findByIdAndUpdate({ _id: timer?._id }, { status: TimerStatuses.finished, passed: duration, changedAt: Date.now() }, { new: true }));
+                const closedAt = Date.now();
+                const nextTimer = await Timer.findByIdAndUpdate({ _id: timer?._id }, { status: TimerStatuses.finished, passed: duration, changedAt: closedAt, timerId: 0 }, { new: true });
+                socket.emit('timer:status_changed', nextTimer);
+                // debugger;
+                await User.findByIdAndUpdate(userId, { $push: { timers: { timerId: nextTimer?._id, closedAt } } });
             }
         });
 

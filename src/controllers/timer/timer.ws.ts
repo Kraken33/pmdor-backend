@@ -2,23 +2,23 @@ import { HydratedDocument } from 'mongoose';
 import { TimerTypes, TimerType, Timer } from '../../models/timer';
 import { timer } from './timer.shared';
 
-const play = ({ socket }: any) => async ({ type }: { type: TimerTypes } = { type: TimerTypes.test }) => {
+const play = ({ socket, userId }: any) => async ({ type }: { type: TimerTypes } = { type: TimerTypes.test }) => {
     let currentTimer: HydratedDocument<TimerType> | null = await Timer.getCurrent();
     if (!currentTimer)
         currentTimer = await Timer.create({ type });
-    const nextTimer = await timer.play({ socket })();
+    const nextTimer = await timer.play({ socket })({ userId });
     if (nextTimer)
-        socket.emit('timer:status_changed', nextTimer);
+        socket.to(userId).emit('timer:status_changed', nextTimer);
 }
 
-const pause = ({socket}: any)=>async ()=>{
+const pause = ({ socket }: any) => async () => {
     let currentTimer: HydratedDocument<TimerType> | null = await Timer.getCurrent();
-    
-        if (currentTimer) {
-            clearTimeout(currentTimer.timerId);
-            const nextTimer = await timer.pause();
-            socket.emit('timer:status_changed', nextTimer);
-        }
+
+    if (currentTimer) {
+        clearTimeout(currentTimer.timerId);
+        const nextTimer = await timer.pause();
+        socket.emit('timer:status_changed', nextTimer);
+    }
 }
 
 export const timerWSControllers = {

@@ -3,7 +3,7 @@ import { timer } from './timer.shared';
 import { Request, Response } from 'express';
 
 const play = ({socket}: any)=>async (req: Request, res: Response) => {
-    if(await timer.play({socket})())
+    if(await timer.play({socket})({userId: req.user.id}))
         return res.sendStatus(200);
 
     return res.sendStatus(404);
