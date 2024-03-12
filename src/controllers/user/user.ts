@@ -1,9 +1,6 @@
 import { Request, Response } from 'express';
-import reverse from 'lodash/fp/reverse';
 import map from 'lodash/fp/map';
-import flow from 'lodash/fp/flow';
 import prop from 'lodash/fp/property';
-import { HydratedDocument } from 'mongoose';
 import { User } from '../../models/user';
 import { Timer } from '../../models/timer';
 

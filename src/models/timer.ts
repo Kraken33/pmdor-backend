@@ -5,13 +5,15 @@ const counterDuration = {
     SHORT_BREAK: 5,
     LONG_BREAK: 15,
     TEST: .5,
+    SB_TEST: .25,
 }
 
 const getDurationByType = (type: TimerTypes) => ({
     [TimerTypes.pomadoro]: counterDuration.POMADORO,
     [TimerTypes.shortBreak]: counterDuration.SHORT_BREAK,
     [TimerTypes.longBreak]: counterDuration.LONG_BREAK,
-    [TimerTypes.test]: counterDuration.TEST
+    [TimerTypes.pomadoroTest]: counterDuration.TEST,
+    [TimerTypes.shortBreakTest]: counterDuration.SB_TEST,
 }[type] * 60_000)
 
 export enum TimerStatuses {
@@ -25,7 +27,8 @@ export enum TimerTypes {
     pomadoro,
     shortBreak,
     longBreak,
-    test,
+    pomadoroTest,
+    shortBreakTest,
 }
 
 export type TimerType = {
@@ -38,12 +41,13 @@ export type TimerType = {
     timerId: number;
 }
 
-interface TimerMethods {
-    pause(): Promise<HydratedDocument<TimerType> | null>
+interface TimerMethods extends TimerType, Document {
+    pause(): Promise<HydratedDocument<TimerType>>;
+    play(): Promise<HydratedDocument<TimerType>>;
 }
 
-interface TimerModel extends Model<TimerType, {}, TimerMethods> {
-    getCurrent(): Promise<HydratedDocument<TimerType>>;
+interface TimerModel extends Model<TimerMethods> {
+    getCurrent(): Promise<HydratedDocument<TimerMethods>>;
 }
 
 const timerSchema = new mongoose.Schema<TimerType, TimerModel, TimerMethods>({
@@ -69,10 +73,6 @@ const timerSchema = new mongoose.Schema<TimerType, TimerModel, TimerMethods>({
     passed: {
         type: Number,
         default: 0,
-    },
-    timerId: {
-        type: Number,
-        default: 0,
     }
 }, {
     statics: {
@@ -80,6 +80,26 @@ const timerSchema = new mongoose.Schema<TimerType, TimerModel, TimerMethods>({
             return this.findOne().where('status').ne(TimerStatuses.finished).sort('-createdAt');
         },
     },
+    methods: {
+        async pause() {
+            let delta = Date.now() - this.changedAt,
+                passed = this.passed + delta;
+
+            this.status = TimerStatuses.paused;
+            this.changedAt = Date.now();
+            this.passed = passed;
+            this.save();
+
+            return this;
+        },
+        async play() {
+            this.status = TimerStatuses.processing;
+            this.changedAt = Date.now();
+            this.save();
+
+            return this;
+        }
+    } as any
 });
 
-export const Timer = mongoose.model<TimerType, TimerModel>('Timer', timerSchema);
+export const Timer = mongoose.model<TimerMethods, TimerModel>('Timer', timerSchema as any);
