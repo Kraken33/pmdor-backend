@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 
-type UserTimer = {
+export type UserTimer = {
     timerId: string;
     closedAt: number;
 }

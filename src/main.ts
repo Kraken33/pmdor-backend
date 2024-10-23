@@ -1,40 +1,48 @@
+import 'dotenv/config';
+
 import { Express } from 'express';
 import { Server } from 'socket.io';
-import { Timer } from './models/timer';
-import { timerWSControllers } from './controllers/timer/timer.ws';
+import { Timer } from './models/timers';
+import { timerWSControllers } from './controllers/timers/timer.ws';
 import { createExpress } from './app/createExpress';
 import { createMongodbConnection } from './app/createMongodbConnection';
 import { createWSConnection } from './app/createWSConnection';
-import { timerRouter } from './routers/timer';
+import { timersRouter } from './routers/timers';
 import { userRouter } from './routers/user';
+import { tasksRouter } from './routers/tasks';
 import { User } from './models/user';
+// import { tasksController } from './controllers/tasks';
+import { Tasks } from './models/task';
 
 function bootstrap<T = any>(onDone: (p: { app: Express; io: Server }) => void) {
-    createMongodbConnection();
-    const { app, server } = createExpress();
-    const io = createWSConnection({ server });
-    onDone({ app, io });
+    createMongodbConnection().then(()=>{
+        const { app, server } = createExpress();
+        const io = createWSConnection({ server });
+        onDone({ app, io });
+    });
 }
 
 let currentSocket: any = null;
 
 bootstrap(async ({ app, io }) => {
     let user: any = await User.findOne();
-    console.log(user, 'u');
-    if (user === null)
+    if (user === null) {
         user = await User.create({});
+        await Tasks.create({ownerId: user._id});
+    }
     app.use((req, res, next) => {
         req.user = {
             id: user._id,
         };
         next();
     });
-    timerRouter.use((req, res, next) => {
+    timersRouter.use((req: any, res: any, next: any) => {
         req.socket = currentSocket;
         next();
     });
-    app.use('/timer', timerRouter);
+    app.use('/timer', timersRouter);
     app.use('/user', userRouter);
+    app.use('/tasks', tasksRouter);
 
     io.on('connection', async (socket: any) => {
         currentSocket = socket;
